@@ -1,0 +1,15 @@
+{
+  "name": "host-builder-core",
+  "version": "1.0.0",
+  "description": "Core part of hostbuilder. HostBuilder - is a library that use Generic Host Builder concept from dotNet and implement in node. Support Dependency injection, multithreading, context isolation and other features via plugins",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Kitsunoff",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.8.10",
+    "typescript": "^5.2.2"
+  }
+}
