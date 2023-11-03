@@ -1,76 +1,63 @@
-import { Host, HostBuilderMiddleWare, HostBuilderMiddleWareContext, HostedService, ServiceFactoryOrFilePath, InitializingContext, InitializingAfterRunScriptContext } from "../interfaces";
+import { Host, HostBuilderMiddleWare, HostBuilderMiddleWareContext, HostedService, ServiceFactoryOrFilePath, InitializingContext, InitializingAfterRunScriptContext, ServiceEvents, HostEvents } from "../interfaces";
 import {Script} from 'node:vm'
+import fs from 'node:fs'
+import { EventEmitter } from "node:stream";
+import TypedEventEmitter from "typed-emitter";
+import { type } from "node:os";
 
 
 
+type InternalHostBuilderMiddlewareContext = HostBuilderMiddleWareContext & {
+    hostedServices: {
+        service: ServiceFactoryOrFilePath;
+        args: any[];
+    }[];
+};
 
-const createMiddlewareContext = (): HostBuilderMiddleWareContext & {hostedServices: ServiceFactoryOrFilePath[], hooksMap: Map<string, ((ctx: any) => void)[]> } => {
+const createMiddlewareContext = (): InternalHostBuilderMiddlewareContext => {
 
 
-    const hostedServices: ServiceFactoryOrFilePath[] = []
-    const hooksMap: Map<string, ((ctx: any) => void)[]> = new Map()
-    hooksMap.set("pre-vm", [])
-    hooksMap.set("pre-start", [])
-    hooksMap.set("post-start", [])
-    hooksMap.set("pre-stop", [])
-    hooksMap.set("post-stop", [])
+    const hostedServices: {service: ServiceFactoryOrFilePath, args: any[]}[] = []
+
     return {
         hostedServices,
-        hooksMap,
         services: {
-            register: (service): void => {
-                hostedServices.push(service)
+            register: (service, ...args): void => {
+                hostedServices.push({service, args})
             } 
         },
-        hooks: {
-            preVmInitializedHook(cb) {
-                const arr = hooksMap.get("pre-vm")
-                arr?.push(cb)
-            },
-            preStartHook(cb) {
-                const arr = hooksMap.get("pre-start")
-                arr?.push(cb)
-            },
-            postStartHook(cb) {
-                const arr = hooksMap.get("post-start")
-                arr?.push(cb)
-            },
-            preStopHook(cb) {
-                const arr = hooksMap.get("pre-stop")
-                arr?.push(cb)
-            },
-            postStopHook(cb) {
-                const arr = hooksMap.get("post-stop")
-                arr?.push(cb)
-            }
+        events: new EventEmitter() as TypedEventEmitter<ServiceEvents & HostEvents>
         }
-    } 
+} 
 
-}
+
 
 export class HostImpl implements Host {
 
     private _services: HostedService[] = []
 
     private _initialized: boolean = false
+    private _ctx: InternalHostBuilderMiddlewareContext
     constructor(private middlewares: HostBuilderMiddleWare[]) {
-
+        //@ts-ignore
+        this._ctx = undefined;
     }
 
     async start(): Promise<void> {
-
-        const ctx = createMiddlewareContext();
+        this._ctx = createMiddlewareContext()
+        
         for (const middleware of this.middlewares) {
-            await middleware(ctx)
+            await middleware(this._ctx)
         }
-        ctx.hostedServices.forEach(async serviceDef => {
+        this._ctx.events.emit('hostStarting', this)
+        this._ctx.hostedServices.forEach(async serviceDef => {
             //@ts-ignore
-            const source = typeof serviceDef === 'function' ? serviceDef.toString() : serviceDef;
+            const source = typeof serviceDef.service === 'function' ? serviceDef.service.toString() : serviceDef.service
 
             const script = new Script(source)
             const globalForScript = {...globalThis}
-            ctx.hooksMap.get('pre-vm')?.forEach(h => h({service: source, sandboxContext: globalForScript}))
-            const evalresultOrPromise = script.runInNewContext(globalForScript)(undefined) as HostedService | Promise<HostedService>
+            this._ctx.events.emit('preVmInit', {service: source, sandboxContext: globalForScript})
+            const evalresultOrPromise = script.runInNewContext(globalForScript)(serviceDef.args) as HostedService | Promise<HostedService>
             let evalresult: HostedService;
             //@ts-ignore
             if(typeof evalresultOrPromise.then === 'function') {
@@ -78,29 +65,46 @@ export class HostImpl implements Host {
             }
             else {
                 evalresult = evalresultOrPromise as HostedService
-                
+
             }
                 
             this._services.push(evalresult)
-            ctx.hooksMap.get('pre-start')?.forEach(h => h({service: source, sandboxContext: globalForScript, evaledModule: evalresult}))
+            this._ctx.events.emit('preStart',{service: source, sandboxContext: globalForScript, evaledModule: evalresult})
             await evalresult.start()
-            ctx.hooksMap.get('post-start')?.forEach(h => h({service: source, sandboxContext: globalForScript, evaledModule: evalresult}))
+            this._ctx.events.emit('postStart',{service: source, sandboxContext: globalForScript, evaledModule: evalresult})
             
         });
 
+        this._ctx.events.emit('hostStarted', this)
         //dirty hack
         this._initialized = true
         
     }
      stop(): Promise<void> {
+        this._ctx.events.emit('hostStopping', this)
+
         return new Promise((resolve) => {
             const interval = setInterval(() => {
                 if(this._initialized) {
                     clearInterval(interval)
                     this._services.forEach(async t => {
+                        this._ctx.events.emit('preStop', {evaledModule: t})
                         await t.stop()
+                        this._ctx.events.emit('postStop', {evaledModule: t})
+                        const index = this._services.indexOf(t)
+                        if(index !== 1) {
+                            this._services.splice(index, 1)
+                        }
+
                     })
-                    resolve()
+                    const post = setInterval(() => {
+                        if(this._services.length == 0) {
+                            clearInterval(post)
+                            this._ctx.events.emit('hostStopped', this)
+                            //@ts-ignore
+                            delete this._ctx
+                        }
+                    }, 20)
                 }
             }, 10)
         })

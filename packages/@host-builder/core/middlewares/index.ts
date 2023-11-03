@@ -1,3 +1,3 @@
 import {configureLogging} from './configureLogging'
-
-export {configureLogging}
+import { currentThreadWorker } from './backgroudWorker'
+export {configureLogging, currentThreadWorker }

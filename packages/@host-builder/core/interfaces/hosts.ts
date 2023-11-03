@@ -16,6 +16,13 @@ export interface Host {
 
 }
 
+export type HostEvents = {
+    hostStarting: (host: Host) => void
+    hostStarted: (host: Host) => void
+    hostStopping: (host: Host) => void
+    hostStopped: (host: Host) => void
+}
+
 export interface HostedService {
     start(): Promise<void>
     stop(): Promise<void>
