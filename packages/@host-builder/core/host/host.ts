@@ -5,8 +5,7 @@ import { EventEmitter } from "node:stream";
 import TypedEventEmitter from "typed-emitter";
 import { type } from "node:os";
 import { createRequire } from "node:module";
-
-
+import path from 'path';
 
 type InternalHostBuilderMiddlewareContext = HostBuilderMiddleWareContext & {
     hostedServices: {
@@ -44,6 +43,7 @@ export class HostImpl implements Host {
         this._ctx = undefined;
     }
 
+
     async start(): Promise<void> {
         this._ctx = createMiddlewareContext()
         
@@ -52,15 +52,19 @@ export class HostImpl implements Host {
         }
         this._ctx.events.emit('hostStarting', this)
         this._ctx.hostedServices.forEach(async serviceDef => {
-            //@ts-ignore
             const isFunc = typeof serviceDef.service === 'function'
-            const source = isFunc ? serviceDef.service.toString() : serviceDef.service
-
-            const script = new Script(source as string)
-            const req = createRequire(isFunc ? require.main?.filename as string : serviceDef.service.toString())
-            const globalForScript = {...globalThis}
+            //@ts-ignore
+            const source = isFunc ? serviceDef.service.toString() : fs.readFileSync(serviceDef.service.source).toString()
+            
+            const script = new Script(source as string, {
+                //@ts-ignore
+                filename: isFunc ? '': path.resolve(serviceDef.service.source)
+            })
+            //@ts-ignore
+            const req = createRequire(isFunc ? require.main?.filename as string : path.resolve(serviceDef.service.source))
+            const globalForScript = {...globalThis, module: {}}
             globalForScript.require = req
-            this._ctx.events.emit('preVmInit', {service: source, sandboxContext: globalForScript})
+            this._ctx.events.emit('preVmInit', {service: serviceDef.service, sandboxContext: globalForScript})
             const evalresultOrPromise = script.runInNewContext(globalForScript)(serviceDef.args) as HostedService | Promise<HostedService>
             let evalresult: HostedService;
             //@ts-ignore
@@ -73,9 +77,9 @@ export class HostImpl implements Host {
             }
                 
             this._services.push(evalresult)
-            this._ctx.events.emit('preStart',{service: source, sandboxContext: globalForScript, evaledModule: evalresult})
+            this._ctx.events.emit('preStart',{service: serviceDef.service, sandboxContext: globalForScript, evaledModule: evalresult})
             await evalresult.start()
-            this._ctx.events.emit('postStart',{service: source, sandboxContext: globalForScript, evaledModule: evalresult})
+            this._ctx.events.emit('postStart',{service: serviceDef.service, sandboxContext: globalForScript, evaledModule: evalresult})
             
         });
 

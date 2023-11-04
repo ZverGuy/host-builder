@@ -5,7 +5,7 @@ export type HostedServiceFactory = (args: any) => HostedService;
 export type AsyncHostedServiceFactory = (args: any) => Promise<HostedService>
 
 
-export type ServiceFactoryOrFilePath = string | HostedServiceFactory | AsyncHostedServiceFactory;
+export type ServiceFactoryOrFilePath = {source: string, currentFilePath: string | undefined } | HostedServiceFactory | AsyncHostedServiceFactory;
 
 
 

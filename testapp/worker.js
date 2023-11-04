@@ -6,7 +6,7 @@ module.exports = (args) => {
     return {
 
         async start() {
-            console.log('1111')
+           throw new Error()
         },
         async stop() {
             console.log('2222')

@@ -17,7 +17,7 @@ const Executetable = (args) => ({
 })
 
 const host = createHostBuilder()
-    .use(configureLogging(), currentThreadWorker('./worker.js')).build();
+    .use(configureLogging(), currentThreadWorker('./worker.js'), currentThreadWorker(Executetable)).build();
 
 
 (async () => {
