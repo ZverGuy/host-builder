@@ -10,7 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@host-builder/core": "file:../dist/@host-builder/core",
+    "host-builder-core": "file:../dist/@host-builder/core",
     "isolated-vm": "^4.6.0",
     "vm2": "^3.9.19"
   }

@@ -6,32 +6,10 @@ export const currentThreadWorker = (worker: ServiceFactoryOrFilePath, initialDat
 
 
     const isFunction = typeof worker === 'function'
-    const source = isFunction ? worker.toString() : readFileSync(worker).toString()
+    const source = isFunction ? worker.toString() : worker
 
     return (ctx) => {
-            ctx.services.register((args) => {
-                const src = args[0]
-                const isF = args[1]
-                const inData = args[2]
-                let obj: HostedService
-                if(isF) {
-                    obj = eval(src)(inData)
-                } else {
-                    obj = require(src)(inData)
-
-                }
-                return {
-
-
-                    async start() {
-                        await obj.start()
-                    },
-    
-                    async stop() {
-                        await obj.stop()
-                    },
-                }
-            }, source, isFunction, initialData)
+            ctx.services.register(source, initialData)
         }
 
 }

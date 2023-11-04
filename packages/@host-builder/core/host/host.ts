@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import { EventEmitter } from "node:stream";
 import TypedEventEmitter from "typed-emitter";
 import { type } from "node:os";
+import { createRequire } from "node:module";
 
 
 
@@ -52,10 +53,13 @@ export class HostImpl implements Host {
         this._ctx.events.emit('hostStarting', this)
         this._ctx.hostedServices.forEach(async serviceDef => {
             //@ts-ignore
-            const source = typeof serviceDef.service === 'function' ? serviceDef.service.toString() : serviceDef.service
+            const isFunc = typeof serviceDef.service === 'function'
+            const source = isFunc ? serviceDef.service.toString() : serviceDef.service
 
-            const script = new Script(source)
+            const script = new Script(source as string)
+            const req = createRequire(isFunc ? require.main?.filename as string : serviceDef.service.toString())
             const globalForScript = {...globalThis}
+            globalForScript.require = req
             this._ctx.events.emit('preVmInit', {service: source, sandboxContext: globalForScript})
             const evalresultOrPromise = script.runInNewContext(globalForScript)(serviceDef.args) as HostedService | Promise<HostedService>
             let evalresult: HostedService;
@@ -114,4 +118,3 @@ export class HostImpl implements Host {
     }
 
 }
-

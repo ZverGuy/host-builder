@@ -1,10 +1,8 @@
 
 console.log('1')
 
-const {createHostBuilder} = require('../dist/@host-builder/core');
-const {configureLogging, currentThreadWorker} = require('../dist/@host-builder/core/middlewares');
-
-
+const {configureLogging, currentThreadWorker} = require('@host-builder/core/middlewares');
+const {createHostBuilder} = require('@host-builder/core')
 const Executetable = (args) => ({
     iterval: undefined,
     async start() {
@@ -19,7 +17,7 @@ const Executetable = (args) => ({
 })
 
 const host = createHostBuilder()
-    .use(configureLogging(), currentThreadWorker(Executetable)).build();
+    .use(configureLogging(), currentThreadWorker('./worker.js')).build();
 
 
 (async () => {
